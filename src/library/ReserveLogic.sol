@@ -12,7 +12,7 @@ library ReserveLogic {
         DataTypes.Reserve storage reserve
     ) public view returns (uint total, uint borrowed) {
         borrowed = totalBorrow(reserve);
-        total = totalAvailable(reserve) + borrowed;
+        total = availableLiquidity(reserve) + borrowed;
     }
 
     function totalBorrow(
@@ -21,7 +21,7 @@ library ReserveLogic {
         return reserve.totalBorrowed; //+ interest
     }
 
-    function totalAvailable(
+    function availableLiquidity(
         DataTypes.Reserve storage reserve
     ) public view returns (uint) {
         return ERC20(reserve.underlyingAsset).balanceOf(reserve.rToken);

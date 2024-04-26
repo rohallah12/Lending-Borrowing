@@ -24,6 +24,14 @@ contract LendingPool is ReentrancyGuard, Payments {
         _;
     }
 
+    event Redeemed(
+        uint indexed reservedId,
+        uint rTokenAmount,
+        uint underlyingAmount,
+        address indexed receiver,
+        address indexed redemer
+    );
+
     constructor(address _WETH9) Payments(_WETH9) {}
 
     /**
@@ -110,6 +118,14 @@ contract LendingPool is ReentrancyGuard, Payments {
             _to,
             _receiveNativeETH
         );
+
+        emit Redeemed(
+            _reserveId,
+            _amountToRedeem,
+            underlyingAmount,
+            _to,
+            msg.sender
+        );
     }
 
     function _redeem(
@@ -124,13 +140,19 @@ contract LendingPool is ReentrancyGuard, Payments {
             (_redeemAmount * reserve.getRTokenExchangeRate()) /
             1e18;
 
+        require(
+            underlyingAmount <= reserve.availableLiquidity(),
+            "not enough tokens available"
+        );
+
         if (_receiveNative && reserve.underlyingAsset == WETH9) {
             rToken(reserve.rToken).burn(
-                address(this),
+                address(this), //burning from this address, since tokens are here now
                 _redeemAmount,
                 underlyingAmount
             );
-            //unwrap WETH9 and send
+            // unwrap WETH9 and send
+            unwrapWETH9(underlyingAmount, _to);
         } else {
             rToken(reserve.rToken).burn(_to, _redeemAmount, underlyingAmount);
         }

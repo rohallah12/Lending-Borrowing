@@ -52,4 +52,9 @@ contract rToken is ReentrancyGuard, ERC20("rsam debt Token", "rToken") {
     ) external OnlyLendingPool nonReentrant {
         underlyingAsset.safeTransfer(_to, _amount);
     }
+
+    function getPrice() public view returns (uint) {
+        return
+            (totalSupply() * 1e18) / underlyingAsset.balanceOf(address(this));
+    }
 }

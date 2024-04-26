@@ -7,14 +7,24 @@ import {rToken} from "./RToken.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {ReserveLogic} from "./library/ReserveLogic.sol";
+import {Payments} from "./Payment.sol";
 
-contract LendingPool is ReentrancyGuard {
+contract LendingPool is ReentrancyGuard, Payments {
     using SafeERC20 for ERC20;
+    using ReserveLogic for DataTypes.Reserve;
 
     mapping(uint => DataTypes.DebtPosition) public debtPosition;
     mapping(uint => DataTypes.Reserve) public reserves;
     mapping(uint => mapping(address => uint)) public credit;
     mapping(address => bool) public isWhitelistedBorrower;
+
+    modifier avoidUsingNativeEther() {
+        require(msg.value == 0, "msg value must be zero");
+        _;
+    }
+
+    constructor(address _WETH9) Payments(_WETH9) {}
 
     /**
      * msg.sender in this function is a vault */
@@ -78,25 +88,52 @@ contract LendingPool is ReentrancyGuard {
 
     function redeem(
         uint _reserveId,
-        uint _amountToRedeem
-    ) external nonReentrant {
+        uint _amountToRedeem,
+        address _to,
+        bool _receiveNativeETH
+    ) external payable nonReentrant avoidUsingNativeEther {
         DataTypes.Reserve storage reserve = reserves[_reserveId];
+
+        if (_amountToRedeem == ~uint256(0)) {
+            _amountToRedeem = ERC20(reserve.rToken).balanceOf(msg.sender);
+        }
+
         ERC20(reserve.rToken).safeTransferFrom(
             msg.sender,
             address(this),
             _amountToRedeem
         );
 
-        _redeem(msg.sender, reserve.rToken, _amountToRedeem);
+        uint underlyingAmount = _redeem(
+            reserve,
+            _amountToRedeem,
+            _to,
+            _receiveNativeETH
+        );
     }
 
     function _redeem(
-        address _receiver,
-        address _rToken,
-        uint _redeemAmount
-    ) internal {
+        DataTypes.Reserve storage reserve,
+        uint _redeemAmount,
+        address _to,
+        bool _receiveNative
+    ) internal returns (uint underlyingAmount) {
         //get the convertion and convert rToken amount to underlying amount
-        
+        //@audit-info rounds down
+        underlyingAmount =
+            (_redeemAmount * reserve.getRTokenExchangeRate()) /
+            1e18;
+
+        if (_receiveNative && reserve.underlyingAsset == WETH9) {
+            rToken(reserve.rToken).burn(
+                address(this),
+                _redeemAmount,
+                underlyingAmount
+            );
+            //unwrap WETH9 and send
+        } else {
+            rToken(reserve.rToken).burn(_to, _redeemAmount, underlyingAmount);
+        }
     }
 
     //unstake from the stakingPool and then redeem the R tokens

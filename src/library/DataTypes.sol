@@ -12,6 +12,7 @@ library DataTypes {
 
     struct Reserve {
         uint reserveId;
+        uint borrowingIndex;
         uint totalBorrowed;
         uint maxBorrow;
         address rToken;

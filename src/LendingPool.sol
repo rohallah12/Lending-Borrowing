@@ -14,6 +14,7 @@ contract LendingPool is ReentrancyGuard, Payments {
     using SafeERC20 for ERC20;
     using ReserveLogic for DataTypes.Reserve;
 
+    uint public debtIds;
     mapping(uint => DataTypes.DebtPosition) public debtPosition;
     mapping(uint => DataTypes.Reserve) public reserves;
     mapping(uint => mapping(address => uint)) public credit;
@@ -33,6 +34,31 @@ contract LendingPool is ReentrancyGuard, Payments {
     );
 
     constructor(address _WETH9) Payments(_WETH9) {}
+
+    //how to open a debtposition? we know that to be albe to borrow tokens we need a debtId, and we have to be
+    //owner of that debt position, so before everything else, we have to open a debt position
+    function newDebtPosition(
+        uint _reserveId
+    ) public nonReentrant returns (uint debtId) {
+        DataTypes.Reserve memory reserve = reserves[_reserveId];
+
+        //checking that reserve is active for borrowing and is also not freezed
+        require(reserve.isEnabled, "Reserve is not enabled");
+        require(!reserve.isFreezed, "Reserve is freezed");
+
+        //update reserve state before creating a new positions here
+        //TO-DO
+
+        debtId = debtIds++;
+        DataTypes.DebtPosition memory position = DataTypes.DebtPosition({
+            owner: msg.sender,
+            reserveId: _reserveId,
+            borrowed: 0,
+            borrowIndex: reserve.borrowingIndex
+        });
+
+        debtPosition[debtId] = position;
+    }
 
     /**
      * msg.sender in this function is a vault */
